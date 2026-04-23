@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Holiday-vibes light mode — warm sand backgrounds, sunset accents */
+    --background: 36 100% 98%;       /* almost white with warm tint */
+    --foreground: 20 14% 18%;        /* dark warm grey */
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 18%;
+
+    --primary: 24 95% 53%;           /* sunset orange */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 36 60% 94%;         /* warm sand */
+    --secondary-foreground: 20 14% 18%;
+
+    --muted: 36 30% 94%;
+    --muted-foreground: 20 14% 50%;
+
+    --accent: 200 90% 94%;           /* light ocean blue */
+    --accent-foreground: 200 80% 30%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 36 30% 88%;
+    --input: 36 30% 88%;
+    --ring: 24 95% 53%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 36 30% 92%;
+
+    --card: 220 20% 14%;
+    --card-foreground: 36 30% 92%;
+
+    --popover: 220 20% 14%;
+    --popover-foreground: 36 30% 92%;
+
+    --primary: 24 95% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 20%;
+    --secondary-foreground: 36 30% 80%;
+
+    --muted: 220 20% 20%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 200 50% 20%;
+    --accent-foreground: 200 80% 70%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 24%;
+    --input: 220 20% 24%;
+    --ring: 24 95% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+}
+
+/* Smooth number animation for the total raised counter */
+.number-scroll {
+  display: inline-block;
+  overflow: hidden;
+  height: 1.2em;
+  line-height: 1.2em;
+}
+
+/* Confetti overlay — used by the ConfettiCannon component */
+#confetti-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 999;
+}
