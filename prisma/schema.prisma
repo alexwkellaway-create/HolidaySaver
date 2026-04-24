@@ -1,14 +1,14 @@
-// Holiday Pot — Prisma schema
-// Switch from SQLite to Postgres for production by changing the provider
-// and DATABASE_URL in your .env.
+// HolidaySaver — Prisma schema
+// Uses PostgreSQL (works locally via Neon free tier and on Netlify/Vercel)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Required by Neon for migrations
 }
 
 // ─── NextAuth required tables ────────────────────────────────────────────────
