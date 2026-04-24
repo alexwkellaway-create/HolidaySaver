@@ -6,9 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")   // Pooled connection (port 6543)
-  directUrl = env("DIRECT_URL")     // Direct connection (port 5432) — needed for db push
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // Supabase pooled connection (port 6543)
 }
 
 // ─── NextAuth required tables ────────────────────────────────────────────────
