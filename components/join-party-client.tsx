@@ -1,10 +1,4 @@
 "use client";
-/**
- * Client component for the join page.
- * Handles two states:
- *  1. Signed in → one-click "Join Party" button
- *  2. Not signed in → sign-in form, then auto-join after auth
- */
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -38,8 +32,8 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_EMOJIS[0]);
 
   async function handleJoin() {
@@ -56,29 +50,47 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
     router.push(`/parties/${party.id}`);
   }
 
-  async function handleEmailSignIn(e: React.FormEvent) {
+  async function handleSignInAndJoin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    // First update avatar preference via a lightweight API call
-    // (it will be set properly after they sign in via the join token)
-    // Then send magic link with callbackUrl pointing at the join endpoint
-    const callbackUrl = `/api/join/${party.inviteToken}/redirect?avatar=${encodeURIComponent(selectedAvatar)}`;
-
-    await signIn("email", {
-      email,
-      callbackUrl: `${window.location.origin}${callbackUrl}`,
+    // Sign in with name + email (no email sent — instant)
+    const result = await signIn("credentials", {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      avatarEmoji: selectedAvatar,
       redirect: false,
     });
 
-    setEmailSent(true);
-    setLoading(false);
+    if (result?.error) {
+      toast({ variant: "destructive", title: "Sign in failed", description: "Please try again." });
+      setLoading(false);
+      return;
+    }
+
+    // Now join the party
+    const res = await fetch(`/api/join/${party.inviteToken}`, { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast({ variant: "destructive", title: "Couldn't join", description: data.error });
+      setLoading(false);
+      return;
+    }
+
+    // Update avatar in DB
+    await fetch("/api/user/avatar", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ avatarEmoji: selectedAvatar }),
+    });
+
+    router.push(`/parties/${party.id}`);
   }
 
-  // ── Party info card ──────────────────────────────────────────────────────
-  const header = (
-    <div className="rounded-2xl overflow-hidden shadow-lg mb-6 max-w-sm mx-auto w-full">
-      {/* Cover strip */}
+  // ── Party preview card ────────────────────────────────────────────────
+  const partyPreview = (
+    <div className="rounded-2xl overflow-hidden shadow-lg mb-6 w-full">
       <div className="h-20 bg-gradient-to-r from-orange-400 to-amber-400 flex items-center px-6 gap-3">
         <span className="text-5xl">{party.coverEmoji}</span>
         <div className="text-white">
@@ -92,7 +104,9 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
           <p className="text-muted-foreground text-xs">Host</p>
         </div>
         <div>
-          <p className="font-bold flex items-center justify-center gap-1"><Users className="h-4 w-4" />{party.memberCount}</p>
+          <p className="font-bold flex items-center justify-center gap-1">
+            <Users className="h-4 w-4" />{party.memberCount}
+          </p>
           <p className="text-muted-foreground text-xs">Members</p>
         </div>
         <div>
@@ -100,36 +114,20 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
           <p className="text-muted-foreground text-xs">Holiday date</p>
         </div>
       </div>
-      {/* Member avatars */}
       {party.memberAvatars.length > 0 && (
         <div className="bg-white dark:bg-slate-800 border-t px-5 pb-4 flex items-center gap-1">
           <span className="text-xs text-muted-foreground mr-1">Already in:</span>
-          {party.memberAvatars.map((a, i) => (
-            <span key={i} className="text-xl">{a}</span>
-          ))}
+          {party.memberAvatars.map((a, i) => <span key={i} className="text-xl">{a}</span>)}
         </div>
       )}
     </div>
   );
 
-  if (emailSent) {
-    return (
-      <div className="text-center space-y-4 max-w-sm">
-        {header}
-        <div className="text-6xl">📬</div>
-        <h2 className="text-xl font-bold">Check your inbox!</h2>
-        <p className="text-muted-foreground">
-          We sent a magic link to <strong>{email}</strong>. Click it and you&apos;ll be automatically added to <strong>{party.name}</strong>!
-        </p>
-      </div>
-    );
-  }
-
-  // ── Signed in → one-click join ───────────────────────────────────────────
+  // ── Already signed in → one-click join ───────────────────────────────
   if (isSignedIn) {
     return (
       <div className="w-full max-w-sm space-y-4">
-        {header}
+        {partyPreview}
         <Card className="shadow-xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur">
           <CardContent className="pt-6 space-y-4">
             <div className="text-center space-y-1">
@@ -145,28 +143,28 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
     );
   }
 
-  // ── Not signed in → sign-in form ─────────────────────────────────────────
+  // ── Not signed in → name + email + avatar form ───────────────────────
   return (
     <div className="w-full max-w-sm space-y-4">
-      {header}
+      {partyPreview}
       <Card className="shadow-xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur">
         <CardHeader className="pb-2 text-center">
-          <h2 className="text-xl font-bold">Sign in to join 🙌</h2>
-          <p className="text-muted-foreground text-sm">Enter your email and we&apos;ll send you a magic link. You&apos;ll be auto-added to the party.</p>
+          <h2 className="text-xl font-bold">Join the party 🙌</h2>
+          <p className="text-muted-foreground text-sm">Just your name and email — no password, no faff.</p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleEmailSignIn} className="space-y-5">
-            {/* Pick an avatar */}
+          <form onSubmit={handleSignInAndJoin} className="space-y-5">
+            {/* Avatar picker */}
             <div className="space-y-2">
-              <Label>Pick your avatar emoji</Label>
+              <Label>Pick your emoji</Label>
               <div className="flex flex-wrap gap-2">
                 {AVATAR_EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setSelectedAvatar(emoji)}
-                    className={`text-2xl p-2 rounded-xl border-2 transition-all ${selectedAvatar === emoji ? "border-orange-500 bg-orange-50 dark:bg-orange-950 scale-110" : "border-transparent hover:border-orange-200"}`}
-                  >
+                  <button key={emoji} type="button" onClick={() => setSelectedAvatar(emoji)}
+                    className={`text-2xl p-2 rounded-xl border-2 transition-all ${
+                      selectedAvatar === emoji
+                        ? "border-orange-500 bg-orange-50 dark:bg-orange-950 scale-110"
+                        : "border-transparent hover:border-orange-200"
+                    }`}>
                     {emoji}
                   </button>
                 ))}
@@ -174,20 +172,20 @@ export function JoinPartyClient({ party, isSignedIn }: JoinPartyClientProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
+              <Label htmlFor="name">Your name</Label>
+              <Input id="name" type="text" placeholder="Alex" value={name}
+                onChange={(e) => setName(e.target.value)} required autoFocus maxLength={60} />
             </div>
 
-            <Button type="submit" variant="sunset" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send magic link & join ✨"}
+            <div className="space-y-2">
+              <Label htmlFor="email">Email address</Label>
+              <Input id="email" type="email" placeholder="alex@example.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} required />
+              <p className="text-xs text-muted-foreground">No verification email — you&apos;ll be added instantly.</p>
+            </div>
+
+            <Button type="submit" variant="sunset" className="w-full" size="lg" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Join Party ✈️"}
             </Button>
           </form>
         </CardContent>

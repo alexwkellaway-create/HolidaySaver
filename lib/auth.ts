@@ -1,62 +1,72 @@
 /**
- * NextAuth configuration.
- * Supports:
- *  - Email magic links (no password needed)
- *  - Google OAuth (optional — works without GOOGLE_CLIENT_ID)
+ * NextAuth — simplified credentials auth for friends-only use.
+ * No email sending, no OAuth setup needed.
+ * Users enter their name + email and are signed in immediately.
+ * The invite link is the security gate for joining a party.
  */
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type NextAuthOptions } from "next-auth";
-import EmailProvider from "next-auth/providers/email";
-import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
-  // Use Prisma to persist sessions, accounts, and users
-  adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],
-
   providers: [
-    // Magic-link email — requires SMTP env vars
-    EmailProvider({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT ?? 587),
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        name: { label: "Your name", type: "text" },
+        email: { label: "Email", type: "email" },
+        avatarEmoji: { label: "Avatar", type: "text" },
       },
-      from: process.env.EMAIL_FROM ?? "HolidaySaver <noreply@holidaypot.app>",
-    }),
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.name) return null;
 
-    // Google OAuth — only added when credentials are present
-    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          }),
-        ]
-      : []),
+        const email = credentials.email.toLowerCase().trim();
+        const name = credentials.name.trim();
+        if (!name || !email) return null;
+
+        // Find or create the user — no password needed for friends-only
+        const user = await prisma.user.upsert({
+          where: { email },
+          update: {
+            name,
+            // Update avatar only if a new one was explicitly chosen
+            ...(credentials.avatarEmoji && { avatarEmoji: credentials.avatarEmoji }),
+          },
+          create: {
+            email,
+            name,
+            avatarEmoji: credentials.avatarEmoji || "🙂",
+          },
+        });
+
+        return user;
+      },
+    }),
   ],
+
+  // JWT sessions — no database session table needed
+  session: { strategy: "jwt" },
 
   pages: {
     signIn: "/auth/signin",
-    // verifyRequest: "/auth/verify", // Show "Check your email" page
     error: "/auth/error",
   },
 
   callbacks: {
-    // Attach the user id to the session so API routes can use it
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      // On first sign-in, persist user fields into the token
+      if (user) {
+        token.id = user.id;
+        token.avatarEmoji = (user as { avatarEmoji?: string }).avatarEmoji ?? "🙂";
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.avatarEmoji = (user as { avatarEmoji?: string }).avatarEmoji ?? "🙂";
+        session.user.id = token.id as string;
+        session.user.avatarEmoji = (token.avatarEmoji as string) ?? "🙂";
       }
       return session;
     },
-  },
-
-  session: {
-    strategy: "database", // Store sessions in DB (not JWT) — safer for our use case
   },
 };
